@@ -1,0 +1,11 @@
+newspaper
+wikipedia==1.4.0
+treetaggerwrapper==2.2.4
+gensim==1.0.1
+python-rake==1.0.7
+stop-words
+python-igraph
+textblob
+textblob-fr
+joblib
+
