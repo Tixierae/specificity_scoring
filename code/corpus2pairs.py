@@ -21,7 +21,7 @@ def read_vocab(thr, category, directory_name) :
             vocab.update(Counter(line.strip().split()))
     return dict([(token, count) for token, count in vocab.items() if count >= thr])
     
-def corpus2pairs(category, directory_name, pos = False, dyn=True, delete = True, sub = 0, thr=10, win = 2):
+def corpus2pairs(category, directory_name, pos = False, dyn=True, delete = True, sub = 0, thr=10, win = 5):
     """
         Options:
         --category STRING category of the corpus    
@@ -42,7 +42,8 @@ def corpus2pairs(category, directory_name, pos = False, dyn=True, delete = True,
     subsampler = dict([(word, 1 - np.sqrt(subsample / count)) for word, count in vocab.items() if count > subsample])
     
     rnd = Random(17)
-    corpus_file = directory_name+"/"+category+".txt"
+    corpus_file = directory_name+"/"+category+"_cleaned.txt"
+    #corpus_file = directory_name+"/"+category+"_cleaned_and_stemmed.txt"
     pairs = []  
     with open(corpus_file) as f: 
         for line in f:       

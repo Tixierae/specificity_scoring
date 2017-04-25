@@ -6,44 +6,75 @@ Created on Sat Jan 21 05:53:41 2017
 @author: diop
 """
 
-from library_graph import terms_to_graph
-import networkx as nx
-from tfidf import get_vector_and_features
+from library_graph import terms_to_graph, csv_writer
+import csv
 
-def create_graph(tokens, w=6):
-    """This function has as input a text specific to a corpus and will return the graph of words
-    w is the sliding window
-    tokens = list of words
+def create_graph(tokens, w=5):
+    """Return the graph of words given the corpus(=text)
+
+    Parameters
+    ----------
+    tokens : list of string
+        e.g :   ["Santé","Business","Immobilier","Sport", "Automobile"]
+        
+    w : sliding_window size
+       
+    Returns
+    -------
+    g : directed weigthed graph 
+   
     """
+    
     g = terms_to_graph(tokens, w)
     return g
     
+def get_weights(g):
+     """Return the weights of a graph of words
+
+     Parameters
+     ----------
+     g : directed graph
+       
+     Returns
+     -------
+     weights : list of num
+        
     
-def get_graphs(corpus):
-    """this function create a dictionnary of graphs with as key the category and as value a graph on the category"""
-    graphs = {}
-    for key, document in corpus.iteritems() :
-        #print document
-        graph = create_graph(document)
-        graphs[key] = graph
-    return graphs    
+     """
+     edge_weights = []
+     for edge in g.es:
+         #source = g.vs[edge.source]['name']
+         #target = g.vs[edge.target]['name']
+         #edges.append([source, target])
+         weight = edge['weight']
+         edge_weights.append(weight) 
+     return edge_weights
     
-def print_more_specific_elements(corpus, nbre_elements = 20):
-    """Takes a dictionnary in entry"""
-    X, feature_names, vectorizer = get_vector_and_features(corpus)
-    idf = vectorizer.idf_
+def save_specificity_scores(corpus, nbre_elements = 20):
+    """Print the nbre_elements most specific elements
+
+    Parameters
+    ----------
+    corpus : dictionary 
+        key = category 
+        value = list of tokens obtained from the text in a given domain e.g ["Quick", "Fox",..]
+        
+    nbre_elements : num
+   
+    """ 
     for category, document in corpus.iteritems() :
         print "Constructing sliding window graph for the category "+ category+ "..."  
         g = create_graph(document)
-        cc = nx.clustering(g)   
-#        for w in cc :
-#            if w in idf :
-#                cc[w] = 1/(cc[w] + 1)
-        cc_sorted = sorted(cc.items(), key=lambda x:x[1], reverse=True)
-        #max_cc = cc_sorted[0][1]   
-        #cc_sorted = [(a,b) for a,b in cc_sorted]           
+        weights = get_weights(g)
+        cc = g.transitivity_local_undirected(weights=weights)
+        words = g.vs["name"]
+        scores = zip(words, cc)
+        scores.sort(reverse=True, key=lambda x:x[1])         
         print("Top words in category: {}".format(category))
-        top_words = cc_sorted[:nbre_elements]
+        top_words = scores[:nbre_elements]  
         for word, score in top_words:
             print("\tWord: {}, Clustering Coefficient: {}".format(word, round(score, 5)))
-        print    
+        print 
+        path = "../results/graph_of_words/"+category+".csv" 
+        #path = "../results/graph_of_words/"+category+"_stemmed.csv" 
+        csv_writer(scores, path)

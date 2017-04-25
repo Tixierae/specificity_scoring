@@ -53,8 +53,8 @@ class WordLevelStatistics():
                 self.gen_word_pos(corpus_file)
 
     def gen_word_pos(self,corpus_file):
-        with open(corpus_file, ) as fp:
-            text = fp.read()
+        with open(corpus_file) as fp:
+            text = fp.read().decode("utf-8")
             tokens = nltk.word_tokenize(text)
             tokens = [token for token in tokens if len(token)>2]
             for t in tokens:
@@ -95,12 +95,18 @@ class WordLevelStatistics():
                         * ((n**0.5) * (1.0+2.8*n**-0.865))
         return ls
 
-if __name__ == "__main__":
-    obj = WordLevelStatistics(corpus_file=["../data/Santé_cleaned.txt"])
-    lvls = obj.compute_spectra()
-    lvls = sorted(lvls.items(), key=lambda x: x[1]['C'], reverse=True)
-    with open("Relativity.out","wb+") as fp:
-        print >> fp, "word\tC\tcount\tsigma_nor"
-        for k,v in lvls:
-            print >> fp, "%s\t%s\t%s\t%s" % (k,v['C'],v['count'],v['sigma_nor'])
-    print "Done computing"
+def save_specificity_scores(corpus):
+    for key in corpus :
+        print key
+        #filename = "../data/"+key+"_cleaned_and_stemmed.txt"
+        filename = "../data/"+key+"_cleaned.txt"
+        obj = WordLevelStatistics(corpus_file=[filename])
+        lvls = obj.compute_spectra()
+        lvls = sorted(lvls.items(), key=lambda x: x[1]['C'], reverse=True)
+        new_file = "../results/WordLevelStatistics/"+key+".txt"
+        #new_file = "../results/WordLevelStatistics/"+key+"_stemmed.txt"
+        with open(new_file,"w") as fp:
+            print >> fp, "word\tC\tcount\tsigma_nor"
+            for k,v in lvls:
+                print >> fp, "%s\t%s\t%s\t%s" % (k.encode('utf-8'),v['C'],v['count'],v['sigma_nor'])
+        

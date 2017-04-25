@@ -4,92 +4,109 @@
 import string
 import re 
 import itertools
-import copy
-import igraph
+import csv
 import nltk
-
-from nltk.corpus import stopwords
+#from nltk.corpus import stopwords
+from stop_words import get_stop_words
+from textblob import TextBlob
+from textblob_fr import PatternTagger, PatternAnalyzer
 # requires nltk 3.2.1
-from nltk import pos_tag
-from nltk.stem.wordnet import WordNetLemmatizer
-import networkx as nx
-from itertools import groupby
-                
-             
-def clean_text_simple(text, remove_stopwords=True, pos_filtering=True, stemming=False, countries=None, lang="french"):
-    
-    if text :
-        punct = string.punctuation.replace('-', '')
-        punct = punct.replace('_', '')
-        punct = punct.replace('\'', '')         
-        # convert to lower case
-        text = text.lower()
-        #remove countries
+import igraph
+ 
+def hasNumbers(inputString):
+     return bool(re.search(r'\d', inputString))
                
-        # remove punctuation (preserving intra-word dashes)
-        text = ''.join(l for l in text if l not in punct)
-        if countries :
-            text = ''.join(l for l in text if l not in countries)
-        # strip extra white space
-        text = re.sub(u'’',u' ',text)
-        text = re.sub('\'',' ',text)
-        text = re.sub('\n',' ',text)
-        text = re.sub(' +',' ',text)    
-        # strip leading and trailing white space
-        text = text.strip()
-        # tokenize (split based on whitespace)
-        tokens = text.split(' ')
-        if pos_filtering == True:
-            # apply POS-tagging
-            tagged_tokens = pos_tag(tokens)
-            # retain only nouns and adjectives
-            tokens_keep = []
-            for i in range(len(tagged_tokens)):
-                item = tagged_tokens[i]
-                if (
-                item[1] == 'NN' or
-                item[1] == 'NNS' or
-                item[1] == 'NNP' or
-                item[1] == 'NNPS' or
-                item[1] == 'JJ' or
-                item[1] == 'JJS' or
-                item[1] == 'JJR'
-                ):
-                    tokens_keep.append(item[0])
-            tokens = tokens_keep
-        if remove_stopwords:
-            stpwds = stopwords.words(lang)
-            if lang == "french" :
-                stpwds.append("les")
-                stpwds.append("cet")
-                stpwds.append("cette")
-                stpwds.append("à")
-                stpwds.append("...")
-            stpwds = [st.decode("utf8") for st in stpwds]
-            # remove stopwords
-            tokens = [token for token in tokens if token not in stpwds and len(token) > 2]
-        if stemming:
-            #lmtzr = WordNetLemmatizer()
-            stemmer = nltk.stem.snowball.FrenchStemmer()
-            # apply Porter's stemmer
-            tokens_stemmed = list()
-            for token in tokens:
-                tokens_stemmed.append(stemmer.stem(token))
-            tokens = tokens_stemmed
-            
-        tokens = [x[0] for x in groupby(tokens)] 
-        n = len(tokens)          
-        for i in range(n):
-            while tokens[i].endswith(u'_'):
-                tokens[i] = tokens[i][:-1] 
-            while tokens[i].startswith(u'_'):
-                tokens[i] = tokens[i][1:]    
-        return(tokens)
+def csv_writer(data, path):
+    """
+    Write data to a CSV file path
+    """
+    with open(path, "wb") as csv_file:
+        writer = csv.writer(csv_file, delimiter=',')
+        writer.writerow(("Word","Specificity Score"))
+        for line in data:
+            writer.writerow(line)
+             
+def clean_text_simple(text, remove_stopwords=True, lang="fr"):
+    
+    """Returns a list of tokens 
+
+    Parameters
+    ----------
+    text : string 
+    remove_stopwords : boolean
+    pos_filtering : boolean    
+    lang : string
+        default : "fr"
+        
+    Returns
+    -------
+    tokens : list of strings (tokens)
+
+    Examples
+    --------
+    >>> from library_graph import clean_text_simple
+    >>> text = "Je n'aime pas du tout aller à la plage"
+    >>> tokens = clean_text_simple(text) => [u'aime', u'aller', u'plage']
+    
+    Warning !! L'encoding doit-être en utf-8
+    
+    """
+    if not text :
+        return []
+    
+    
+    # apply POS-tagging and retain only nouns (not personal nouns), adjectives and verbs
+    text = text.replace("|", " ")
+    permitted_pos_tags = ['NN', 'NNS','VB', 'VBN', 'VBG', 'JJ', 'JJS', 'JJR']
+    blob = TextBlob(text, pos_tagger=PatternTagger(), analyzer=PatternAnalyzer())
+    tags = blob.tags
+    
+    #lemmatizing verbs and singularizing words            
+    tokens = [item[0].lower() for item in tags if item[1] in permitted_pos_tags] # there is also a conversion to lower case
+    
+    punct = string.punctuation.replace('-', '')
+    
+    #remove stopwords if there are remaining
+    stpwds = get_stop_words(lang) #stopwords
+    
+    pattern_hours = re.compile('\d+h\d+')   
+    pattern_figures = re.compile('\d+')
+    first_component_bigram = re.compile("^([A-z]*)-")
+    
+    #remove hours and dates
+    tokens = [pattern_hours.sub('', token) for token in tokens]
+    tokens = [pattern_figures.sub('', token) for token in tokens] 
+    #remove punctuation
+    tokens = [token for token in tokens if token not in punct ]
+    #remove bigrams and trigrams that start with a stopword
+    tokens = [first_component_bigram.sub('', token) if (first_component_bigram.findall(token) and first_component_bigram.findall(token)[0] in stpwds) else token for token in tokens ]
+    tokens = [first_component_bigram.sub('', token) if (first_component_bigram.findall(token) and first_component_bigram.findall(token)[0] in stpwds) else token for token in tokens ]
+    tokens = [token for token in tokens if len(token) > 2]
+    punct = string.punctuation
+    tokens = [token.strip(punct) for token in tokens]
+    tokens = [token for token in tokens if token not in stpwds ]
+    #stemmer = nltk.stem.snowball.FrenchStemmer()
+    #tokens = [stemmer.stem(token) for token in tokens]
+    
+ 
+    return( " ".join(tokens))
 
 def terms_to_graph(terms, w):
-    # This function returns a directed, weighted igraph from a list of terms (the tokens from the pre-processed text) e.g., ['quick','brown','fox']
-    # Edges are weighted based on term co-occurence within a sliding window of fixed size 'w'
     
+    """Returns a weighted graph from a list of terms (the tokens from the pre-processed text) e.g., ['quick','brown','fox'] 
+    Edges are weighted based on term co-occurence within a sliding window of fixed size 'w'
+    
+    Parameters
+    ----------
+    terms : list of strings
+    w : sliding_window size    
+    
+    Returns
+    -------
+    g : directed weigthed graph
+    
+    """
+  
     from_to = {}
     
     # create initial complete graph (first w terms)
@@ -133,19 +150,18 @@ def terms_to_graph(terms, w):
                     from_to[try_edge] = 1
     
     # create empty graph
-    #g = igraph.Graph(directed=True)
-    g = nx.Graph()
+    g = igraph.Graph(directed=True)
     
     # add vertices
-    g.add_nodes_from(sorted(set(terms)))   
+    g.add_vertices(sorted(set(terms)))
     
     # add edges, direction is preserved since the graph is directed
-    weighted_edges = [(key[0], key[1], val) for key, val in from_to.iteritems()]
-    g.add_weighted_edges_from(weighted_edges)
+    g.add_edges(from_to.keys())
     
     # set edge and vertice weights
-    #g.es['weight'] = from_to.values() # based on co-occurence within sliding window
-    #g.vs['weight'] = g.strength(weights=from_to.values()) # weighted degree
+    g.es['weight'] = from_to.values() # based on co-occurence within sliding window
+    g.vs['weight'] = g.strength(weights=from_to.values()) # weighted degree
     
     return(g)
+
         
